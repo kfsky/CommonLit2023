@@ -36,6 +36,7 @@ from utils import AverageMeter, asMinutes, get_score, log_params_from_omegaconf_
 
 # 設定
 os.environ["TOKENIZERS_PARALLELISM"] = "true"
+os.environ["HYDRA_FULL_ERROR"] = "1"
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
@@ -98,12 +99,12 @@ def create_data(input_path: str, is_train: bool = True) -> pd.DataFrame:
 def create_text(input_df, tokenizer):
     output_df = input_df.copy()
     sep = tokenizer.sep_token
-    output_df["full_text"] = output_df["prompt_question"] + sep + output_df["prompt_text"]
+    output_df["full_text"] = output_df["prompt_question"] + sep + output_df["text"]
 
     return output_df
 
 
-def train_fn(fold, train_loader, model, criterion, optimizer, scheduler, epoch, cfg):
+def train_fn(train_loader, model, criterion, optimizer, scheduler, epoch, cfg):
     model.train()
     scaler = torch.cuda.amp.GradScaler(enabled=True)
     losses = AverageMeter()
@@ -127,6 +128,7 @@ def train_fn(fold, train_loader, model, criterion, optimizer, scheduler, epoch, 
         log_scaler("train_loss", loss.item(), step)
 
         losses.update(loss.item(), batch_size)
+
         scaler.scale(loss).backward()
         grad_norm = nn.utils.clip_grad_norm_(model.parameters(), cfg.max_grad_norm)
 
@@ -140,12 +142,16 @@ def train_fn(fold, train_loader, model, criterion, optimizer, scheduler, epoch, 
 
         end = time.time()
         if step % cfg.print_freq == 0 or step == (len(train_loader) - 1):
-            print(
-                f"Epoch: [{epoch + 1}][{step}/{len(train_loader)}] "
-                f"Elapsed {end - start:.2f}s, "
-                f"Loss: {losses.avg:.4f}, "
-                f"Grad: {grad_norm:.4f}  "
-            )
+            print('Epoch: [{0}][{1}/{2}] '
+                  'Elapsed {remain:s} '
+                  'Loss: {loss.val:.4f}({loss.avg:.4f}) '
+                  'Grad: {grad_norm:.4f}  '
+                  'LR: {lr:.8f}  '
+                  .format(epoch + 1, step, len(train_loader),
+                          remain=timeSince(start, float(step + 1) / len(train_loader)),
+                          loss=losses,
+                          grad_norm=grad_norm,
+                          lr=scheduler.get_lr()[0]))
 
     return losses.avg
 
@@ -229,36 +235,27 @@ def train_loop(folds, fold, cfg, tokenizer):
     )
 
     model = CustomModel(cfg, config_path=None, pretrained=True)
-    torch.save(model.config, os.path.join(cfg.output_dir, "config.json"))
+    torch.save(model.config, os.path.join(cfg.output_dir, "config.pth"))
     model.to(DEVICE)
 
     # optimizer
     def get_optimizer_params(model, encoder_lr, decoder_lr, weight_decay=0.0):
         param_optimizer = list(model.named_parameters())
         no_decay = ["bias", "LayerNorm.bias", "LayerNorm.weight"]
-
         optimizer_parameters = [
-            {
-                "params": [p for n, p in model.model.named_parameters() if not any(nd in n for nd in no_decay)],
-                "lr": encoder_lr,
-                "weight_decay": weight_decay,
-            },
-            {
-                "params": [p for n, p in model.model.named_parameters() if any(nd in n for nd in no_decay)],
-                "lr": encoder_lr,
-                "weight_decay": 0.0,
-            },
-            {
-                "params": [p for n, p in model.named_parameters() if "model" not in n],
-                "lr": decoder_lr,
-                "weight_decay": 0.0,
-            },
+            {'params': [p for n, p in model.model.named_parameters() if not any(nd in n for nd in no_decay)],
+             'lr': encoder_lr, 'weight_decay': weight_decay},
+            {'params': [p for n, p in model.model.named_parameters() if any(nd in n for nd in no_decay)],
+             'lr': encoder_lr, 'weight_decay': 0.0},
+            {'params': [p for n, p in model.named_parameters() if "model" not in n],
+             'lr': decoder_lr, 'weight_decay': 0.0}
         ]
         return optimizer_parameters
 
     optimizer_parameters = get_optimizer_params(
         model, cfg.optimizer.params.lr, cfg.optimizer.params.lr, cfg.optimizer.params.weight_decay
     )
+
     optimizer = AdamW(
         optimizer_parameters,
         lr=cfg.optimizer.params.lr,
@@ -293,14 +290,17 @@ def train_loop(folds, fold, cfg, tokenizer):
     scheduler = get_scheduler(cfg, optimizer, num_train_steps)
 
     # loop
-    criterion = nn.SmoothL1Loss(reduction="mean")  # RMSELoss(reduction="mean")
+    if cfg.loss.name == "SmoothL1Loss":
+        criterion = nn.SmoothL1Loss(reduction="mean")  # RMSELoss(reduction="mean")
+    elif cfg.loss.name == "RMSELoss":
+        criterion = RMSELoss(reduction="mean")
     best_score = np.inf
 
     for epoch in range(cfg.epochs):
         start_time = time.time()
 
         # train
-        avg_loss = train_fn(fold, train_loader, model, criterion, optimizer, scheduler, epoch, cfg)
+        avg_loss = train_fn(train_loader, model, criterion, optimizer, scheduler, epoch, cfg)
 
         # valid
         avg_val_loss, predictions = valid_fn(valid_loader, model, criterion, cfg)
@@ -349,6 +349,8 @@ def get_result(oof_df):
 
 @hydra.main(version_base=None, config_path="../conf/", config_name="config")
 def main(cfg: DictConfig) -> None:
+    if mlflow.active_run():
+        mlflow.end_run()
     # create output directory
     cwd = hydra.utils.get_original_cwd()
     os.makedirs(os.path.join(cwd, "outputs", cfg.experiment_name), exist_ok=True)
@@ -362,10 +364,11 @@ def main(cfg: DictConfig) -> None:
         cfg.output_dir = output_dir
 
     # set mlflow
-    mlflow.set_tracking_uri(os.path.join("file://", cwd, "mlruns"))
+    # windows環境ではこのようにしないといけない
+    mlflow.set_tracking_uri("file://" + cwd + "\mlruns")
     mlflow.set_experiment(cfg.competition_name)
 
-    with mlflow.start_run(run_name=cfg.experiment_name):
+    with mlflow.start_run(run_name=cfg.experiment_name, nested=True):
         exp_params = log_params_from_omegaconf_dict(cfg)
         mlflow.log_params(exp_params)
 
@@ -375,7 +378,10 @@ def main(cfg: DictConfig) -> None:
         # load data
         train_df = create_data(os.path.join(cwd, "inputs"), is_train=True)
         if cfg.globals.debug:
+            print("Use Debug Dataset")
             train_df = train_df.sample(1000, random_state=cfg.globals.seed).reset_index(drop=True)
+
+        print(train_df.shape)
 
         # load_tokenizer
         tokenizer = AutoTokenizer.from_pretrained(cfg.model_name)
@@ -393,7 +399,13 @@ def main(cfg: DictConfig) -> None:
             for n, (train_index, val_index) in enumerate(fold.split(train_df, train_df["prompt_id"])):
                 train_df.loc[val_index, "fold"] = n
 
-            train_df["fold"] = train_df["fold"].astype(int)
+        elif cfg.split.name == "Content_StratifiedKFold":
+            train_df["bin10_content"] = pd.cut(train_df["content"], bins=10, labels=list(range(10)))
+            fold = StratifiedKFold(n_splits=cfg.split.params.n_splits, shuffle=cfg.split.params.shuffle, random_state=cfg.globals.seed)
+            for fold, (train_index, val_index) in enumerate(fold.split(train_df, train_df["bin10_content"])):
+                train_df.loc[val_index, "fold"] = fold
+
+        train_df["fold"] = train_df["fold"].astype(int)
 
         oof_df = pd.DataFrame()
 
@@ -423,6 +435,8 @@ def main(cfg: DictConfig) -> None:
         mlflow.log_metric("CV score", score)
 
         oof_df.to_csv(os.path.join(cfg.output_dir, "oof_df.csv"), index=False)
+
+    mlflow.end_run()
 
 
 if __name__ == "__main__":

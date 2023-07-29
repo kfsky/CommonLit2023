@@ -22,3 +22,6 @@ https://www.kaggle.com/competitions/commonlit-evaluate-student-summaries
 ~/Desktop/CommonLit2023$ poetry run python src/pipeline.py experiment_name=001 globals.debug=True model_name=microsoft/deberta-v3-small
 ```
 
+## MEMO
+- 2023/7/29：とりあえずA4000 SFF Adaで動かす。BSは16が限界。
+- 

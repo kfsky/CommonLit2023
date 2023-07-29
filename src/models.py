@@ -13,7 +13,6 @@ class MeanPooling(nn.Module):
         sum_mask = input_mask_expanded.sum(1)
         sum_mask = torch.clamp(sum_mask, min=1e-9)
         mean_embeddings = sum_embeddings / sum_mask
-
         return mean_embeddings
 
 
@@ -52,20 +51,18 @@ class CustomModel(nn.Module):
             module.weight.data.normal_(mean=0.0, std=self.config.initializer_range)
             if module.bias is not None:
                 module.bias.data.zero_()
-
         elif isinstance(module, nn.Embedding):
             module.weight.data.normal_(mean=0.0, std=self.config.initializer_range)
             if module.padding_idx is not None:
                 module.weight.data[module.padding_idx].zero_()
-
         elif isinstance(module, nn.LayerNorm):
             module.bias.data.zero_()
             module.weight.data.fill_(1.0)
 
     def feature(self, inputs):
         outputs = self.model(**inputs)
-        last_hidden_state = outputs[0]
-        feature = self.pooling(last_hidden_state, inputs["attention_mask"])
+        last_hidden_states = outputs[0]
+        feature = self.pooling(last_hidden_states, inputs["attention_mask"])
 
         return feature
 
