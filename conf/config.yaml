@@ -9,6 +9,7 @@ competition_name: CommonLit2023
 experiment_name: default
 model_name: microsoft/deberta-v3-base
 pooling: mean
+reinit_layers: 0
 gradient_checkpointing: True
 apex: True
 output_dir: outputs

@@ -38,6 +38,23 @@ class CustomModel(nn.Module):
         if self.cfg.gradient_checkpointing:
             self.model.gradient_checkpointing_enable()
 
+        if cfg.reinit_layers > 0:
+            print(f'Reinitializing Last {cfg.reinit_layers} Layers ...')
+            for layer in self.model.encoder.layer[-cfg.reinit_layers:]:
+                for module in layer.modules():
+                    if isinstance(module, nn.Linear):
+                        module.weight.data.normal_(mean=0.0, std=self.config.initializer_range)
+                        if module.bias is not None:
+                            module.bias.data.zero_()
+                    elif isinstance(module, nn.Embedding):
+                        module.weight.data.normal_(mean=0.0, std=self.config.initializer_range)
+                        if module.padding_idx is not None:
+                            module.weight.data[module.padding_idx].zero_()
+                    elif isinstance(module, nn.LayerNorm):
+                        module.bias.data.zero_()
+                        module.weight.data.fill_(1.0)
+            print('Done.!')
+
         if self.cfg.pooling == "mean":
             self.pooling = MeanPooling()
 

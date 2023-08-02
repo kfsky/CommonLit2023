@@ -26,17 +26,31 @@ def dataset_create_new(dataset_name: str, upload_dir: str):
 
     api = KaggleApi()
     api.authenticate()
-    api.dataset_create_new(folder=upload_dir, dir_mode="tar", convert_to_csv=False)
+
+    if f"{os.environ['KAGGLE_USERNAME']}/{dataset_name.lower()}" not in [
+        str(d) for d in api.dataset_list(user=os.environ["KAGGLE_USERNAME"], search="commonlit2023")
+    ]:
+        print("New Dataset")
+        api.dataset_create_new(folder=upload_dir, dir_mode="tar", convert_to_csv=False)
+
+    else:
+        print("Update Dataset")
+        api.dataset_create_version(
+            folder=upload_dir, version_notes="update", convert_to_csv=False, delete_old_versions=True, dir_mode="tar"
+        )
 
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--exp_name", type=str, default="001")
+    parser.add_argument("exp_name", type=str, default="all")
 
     args = parser.parse_args()
 
     # upload dir
-    upload_dir = os.path.join("./outputs", args.exp_name)
+    if args.exp_name == "all":
+        upload_dir = "./outputs"
+    else:
+        upload_dir = os.path.join("./outputs", args.exp_name)
 
     dataset_create_new(dataset_name=COMPETITION_NAME + "-" + args.exp_name, upload_dir=upload_dir)
 

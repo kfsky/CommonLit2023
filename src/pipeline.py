@@ -13,6 +13,7 @@ import tokenizers
 import torch
 import torch.nn as nn
 import transformers
+from iterstrat.ml_stratifiers import MultilabelStratifiedKFold
 from sklearn.model_selection import GroupKFold, StratifiedKFold
 from torch.optim import AdamW
 from torch.utils.data import DataLoader, Dataset
@@ -30,7 +31,7 @@ import hydra
 import mlflow
 from omegaconf import DictConfig, OmegaConf, open_dict
 
-from criterion import RMSELoss
+from criterion import MCRMSELoss, RMSELoss, WeightedMSELoss
 from models import CustomModel
 from utils import AverageMeter, asMinutes, get_score, log_params_from_omegaconf_dict, seed_everything, timeSince
 
@@ -104,7 +105,7 @@ def create_text(input_df, tokenizer):
     return output_df
 
 
-def train_fn(train_loader, model, criterion, optimizer, scheduler, epoch, cfg):
+def train_fn(train_loader, model, criterion, optimizer, scheduler, epoch, cfg, log_var_l=None, weighted_criterion=None):
     model.train()
     scaler = torch.cuda.amp.GradScaler(enabled=True)
     losses = AverageMeter()
@@ -120,7 +121,12 @@ def train_fn(train_loader, model, criterion, optimizer, scheduler, epoch, cfg):
         batch_size = labels.size(0)
         with torch.cuda.amp.autocast(enabled=True):
             y_preds = model(inputs)
-            loss = criterion(y_preds, labels)
+
+            if cfg.loss.name == "WeightedMSELoss":
+                loss = criterion(y_preds, labels)
+                myloss = weighted_criterion(y_preds, labels, log_var_l[0]["params"])
+            else:
+                loss = criterion(y_preds, labels)
 
         if cfg.gradient_accumulation_steps > 1:
             loss = loss / cfg.gradient_accumulation_steps
@@ -142,16 +148,21 @@ def train_fn(train_loader, model, criterion, optimizer, scheduler, epoch, cfg):
 
         end = time.time()
         if step % cfg.print_freq == 0 or step == (len(train_loader) - 1):
-            print('Epoch: [{0}][{1}/{2}] '
-                  'Elapsed {remain:s} '
-                  'Loss: {loss.val:.4f}({loss.avg:.4f}) '
-                  'Grad: {grad_norm:.4f}  '
-                  'LR: {lr:.8f}  '
-                  .format(epoch + 1, step, len(train_loader),
-                          remain=timeSince(start, float(step + 1) / len(train_loader)),
-                          loss=losses,
-                          grad_norm=grad_norm,
-                          lr=scheduler.get_lr()[0]))
+            print(
+                "Epoch: [{0}][{1}/{2}] "
+                "Elapsed {remain:s} "
+                "Loss: {loss.val:.4f}({loss.avg:.4f}) "
+                "Grad: {grad_norm:.4f}  "
+                "LR: {lr:.8f}  ".format(
+                    epoch + 1,
+                    step,
+                    len(train_loader),
+                    remain=timeSince(start, float(step + 1) / len(train_loader)),
+                    loss=losses,
+                    grad_norm=grad_norm,
+                    lr=scheduler.get_lr()[0],
+                )
+            )
 
     return losses.avg
 
@@ -243,18 +254,38 @@ def train_loop(folds, fold, cfg, tokenizer):
         param_optimizer = list(model.named_parameters())
         no_decay = ["bias", "LayerNorm.bias", "LayerNorm.weight"]
         optimizer_parameters = [
-            {'params': [p for n, p in model.model.named_parameters() if not any(nd in n for nd in no_decay)],
-             'lr': encoder_lr, 'weight_decay': weight_decay},
-            {'params': [p for n, p in model.model.named_parameters() if any(nd in n for nd in no_decay)],
-             'lr': encoder_lr, 'weight_decay': 0.0},
-            {'params': [p for n, p in model.named_parameters() if "model" not in n],
-             'lr': decoder_lr, 'weight_decay': 0.0}
+            {
+                "params": [p for n, p in model.model.named_parameters() if not any(nd in n for nd in no_decay)],
+                "lr": encoder_lr,
+                "weight_decay": weight_decay,
+            },
+            {
+                "params": [p for n, p in model.model.named_parameters() if any(nd in n for nd in no_decay)],
+                "lr": encoder_lr,
+                "weight_decay": 0.0,
+            },
+            {
+                "params": [p for n, p in model.named_parameters() if "model" not in n],
+                "lr": decoder_lr,
+                "weight_decay": 0.0,
+            },
         ]
         return optimizer_parameters
 
     optimizer_parameters = get_optimizer_params(
         model, cfg.optimizer.params.lr, cfg.optimizer.params.lr, cfg.optimizer.params.weight_decay
     )
+    log_var_l = [
+        {
+            "params": [torch.zeros((1,), requires_grad=True, device=DEVICE) for i in range(2)],
+            "lr": cfg.optimizer.params.lr,
+            "weight_decay": 0.0,
+        },
+    ]
+    if cfg.loss.name == "WeightedMSELoss":
+        optimizer_parameters += log_var_l
+    else:
+        optimizer_parameters = optimizer_parameters
 
     optimizer = AdamW(
         optimizer_parameters,
@@ -289,18 +320,50 @@ def train_loop(folds, fold, cfg, tokenizer):
     num_train_steps = int(len(train_folds) / cfg.loader.train.batch_size * cfg.epochs)
     scheduler = get_scheduler(cfg, optimizer, num_train_steps)
 
-    # loop
+    # set criterion
     if cfg.loss.name == "SmoothL1Loss":
-        criterion = nn.SmoothL1Loss(reduction="mean")  # RMSELoss(reduction="mean")
+        criterion = nn.SmoothL1Loss(reduction="mean")
     elif cfg.loss.name == "RMSELoss":
         criterion = RMSELoss(reduction="mean")
+    elif cfg.loss.name == "MCRMSELoss":
+        criterion = MCRMSELoss()
+    elif cfg.loss.name == "WeightedMSELoss":
+        criterion = RMSELoss(reduction="mean")
+        weighted_criterion = WeightedMSELoss()
+    else:
+        criterion = nn.MSELoss(reduction="mean")
+
+    # train loop
     best_score = np.inf
 
     for epoch in range(cfg.epochs):
         start_time = time.time()
 
         # train
-        avg_loss = train_fn(train_loader, model, criterion, optimizer, scheduler, epoch, cfg)
+        if cfg.loss.name == "WeightedMSELoss":
+            avg_loss = train_fn(
+                train_loader,
+                model,
+                criterion,
+                optimizer,
+                scheduler,
+                epoch,
+                cfg,
+                log_var_l=log_var_l,
+                weighted_criterion=weighted_criterion,
+            )
+        else:
+            avg_loss = train_fn(
+                train_loader,
+                model,
+                criterion,
+                optimizer,
+                scheduler,
+                epoch,
+                cfg,
+                log_var_l=None,
+                weighted_criterion=None,
+            )
 
         # valid
         avg_val_loss, predictions = valid_fn(valid_loader, model, criterion, cfg)
@@ -401,9 +464,35 @@ def main(cfg: DictConfig) -> None:
 
         elif cfg.split.name == "Content_StratifiedKFold":
             train_df["bin10_content"] = pd.cut(train_df["content"], bins=10, labels=list(range(10)))
-            fold = StratifiedKFold(n_splits=cfg.split.params.n_splits, shuffle=cfg.split.params.shuffle, random_state=cfg.globals.seed)
+            fold = StratifiedKFold(
+                n_splits=cfg.split.params.n_splits, shuffle=cfg.split.params.shuffle, random_state=cfg.globals.seed
+            )
             for fold, (train_index, val_index) in enumerate(fold.split(train_df, train_df["bin10_content"])):
                 train_df.loc[val_index, "fold"] = fold
+
+        elif cfg.split.name == "MultilabelStratifiedKFold":
+            fold = MultilabelStratifiedKFold(
+                n_splits=cfg.split.params.n_splits, shuffle=cfg.split.params.shuffle, random_state=cfg.globals.seed
+            )
+            for n, (train_index, val_index) in enumerate(fold.split(train_df, train_df[["content", "wording"]])):
+                train_df.loc[val_index, "fold"] = int(n)
+
+        elif cfg.split.name == "Bins_MultilabelStratifiedKFold":
+            train_df["bin10_content"] = pd.cut(train_df["content"], bins=10, labels=list(range(10)))
+            train_df["bin10_wording"] = pd.cut(train_df["wording"], bins=10, labels=list(range(10)))
+            fold = MultilabelStratifiedKFold(
+                n_splits=cfg.split.params.n_splits, shuffle=cfg.split.params.shuffle, random_state=cfg.globals.seed
+            )
+            for n, (train_index, val_index) in enumerate(
+                fold.split(train_df, train_df[["bin10_content", "bin10_wording"]])
+            ):
+                train_df.loc[val_index, "fold"] = int(n)
+
+        elif cfg.split.name == "GroupKFold":
+            fold = GroupKFold(n_splits=cfg.split.params.n_splits)
+
+            for n, (train_index, val_index) in enumerate(fold.split(train_df, groups=train_df["prompt_id"])):
+                train_df.loc[val_index, "fold"] = int(n)
 
         train_df["fold"] = train_df["fold"].astype(int)
 
