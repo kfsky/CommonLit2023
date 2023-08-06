@@ -31,7 +31,7 @@ import hydra
 import mlflow
 from omegaconf import DictConfig, OmegaConf, open_dict
 
-from criterion import MCRMSELoss, RMSELoss, WeightedMSELoss
+from criterion import MCRMSELoss, RMSELoss, WeightedMSELoss, WeightedSmoothL1Loss
 from models import CustomModel
 from utils import AverageMeter, asMinutes, get_score, log_params_from_omegaconf_dict, seed_everything, timeSince
 
@@ -97,10 +97,46 @@ def create_data(input_path: str, is_train: bool = True) -> pd.DataFrame:
     return output_df
 
 
-def create_text(input_df, tokenizer):
+def create_text(input_df, tokenizer, cfg):
     output_df = input_df.copy()
     sep = tokenizer.sep_token
-    output_df["full_text"] = output_df["prompt_question"] + sep + output_df["text"]
+
+    if cfg.use_text == "text":
+        output_df["full_text"] = output_df["text"]
+    elif cfg.use_text == "prompt_question_and_text":
+        output_df["full_text"] = output_df["prompt_question"] + sep + output_df["text"]
+    elif cfg.use_text == "prompt_question_title_text":
+        output_df["full_text"] = (
+            output_df["prompt_question"] + sep + output_df["prompt_title"] + sep + output_df["text"]
+        )
+    elif cfg.use_text == "target_prompt_question_title_text":
+        output_df["full_text"] = (
+            "content wording "
+            + sep
+            + output_df["prompt_question"]
+            + sep
+            + output_df["prompt_title"]
+            + sep
+            + output_df["text"]
+        )
+    elif cfg.use_text == "text_question_title_text_summary":
+        output_df["full_text"] = (
+            output_df["prompt_question"]
+            + sep
+            + output_df["prompt_title"]
+            + sep
+            + output_df["text"]
+            + sep
+            + output_df["prompt_text"]
+        )
+        # 改行文は文章の区切りのように使用している可能性があるので、別文字で置換する（本来は別トークンを用意するべき）
+        output_df["full_text"] = output_df["full_text"].str.replace("\n\n", "|")
+        output_df["full_text"] = output_df["full_text"].str.replace("\r\n", "|")
+
+        # 一部の改行\nは削除するようにする
+        output_df["full_text"] = output_df["full_text"].str.replace("\n", "")
+    else:
+        output_df["full_text"] = output_df["text"]
 
     return output_df
 
@@ -330,6 +366,8 @@ def train_loop(folds, fold, cfg, tokenizer):
     elif cfg.loss.name == "WeightedMSELoss":
         criterion = RMSELoss(reduction="mean")
         weighted_criterion = WeightedMSELoss()
+    elif cfg.loss.name == "WeightedSmoothL1Loss":
+        criterion = WeightedSmoothL1Loss()
     else:
         criterion = nn.MSELoss(reduction="mean")
 
@@ -451,7 +489,7 @@ def main(cfg: DictConfig) -> None:
         tokenizer.save_pretrained(os.path.join(cfg.output_dir, "tokenizer"))
 
         # create_text
-        train_df = create_text(train_df, tokenizer)
+        train_df = create_text(train_df, tokenizer, cfg)
 
         # create_folds
         train_df["fold"] = -1
@@ -489,7 +527,8 @@ def main(cfg: DictConfig) -> None:
                 train_df.loc[val_index, "fold"] = int(n)
 
         elif cfg.split.name == "GroupKFold":
-            fold = GroupKFold(n_splits=cfg.split.params.n_splits)
+            # prompt_idごとに分ける
+            fold = GroupKFold(n_splits=4)
 
             for n, (train_index, val_index) in enumerate(fold.split(train_df, groups=train_df["prompt_id"])):
                 train_df.loc[val_index, "fold"] = int(n)

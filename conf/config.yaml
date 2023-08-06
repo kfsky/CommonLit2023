@@ -9,21 +9,23 @@ competition_name: CommonLit2023
 experiment_name: default
 model_name: microsoft/deberta-v3-base
 pooling: mean
+weightedlayer_start: 1
 reinit_layers: 0
 gradient_checkpointing: True
 apex: True
 output_dir: outputs
-trn_fold: [0, 1, 2, 3, 4]
+trn_fold: [0, 1, 2, 3]
 epochs: 4
 print_freq: 20
 gradient_accumulation_steps: 1
 max_grad_norm: 1000
 batch_scheduler: True
+use_text: text
 
 split:
   name: Content_StratifiedKFold
   params:
-    n_splits: 5
+    n_splits: 4
     shuffle: True
     random_state: 2023
 
@@ -48,6 +50,8 @@ loader:
 
 loss:
   name: SmoothL1Loss
+  parames:
+    beta: 0.1
 
 optimizer:
   name: AdamW
