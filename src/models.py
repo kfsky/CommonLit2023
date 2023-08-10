@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+from torch.nn.parameter import Parameter
 from transformers import AutoConfig, AutoModel, AutoTokenizer
 
 
@@ -81,6 +82,22 @@ class MeanPooling(nn.Module):
         return mean_embeddings
 
 
+class GeMText(nn.Module):
+    def __init__(self, dim=1, p=3, eps=1e-6):
+        super(GeMText, self).__init__()
+        self.dim = dim
+        self.p = Parameter(torch.ones(1) * p)
+        self.eps = eps
+        self.feat_mult = 1
+
+    def forward(self, last_hidden_state, attention_mask):
+        attention_mask_expanded = attention_mask.unsqueeze(-1).expand(last_hidden_state.shape)
+        x = (last_hidden_state.clamp(min=self.eps) * attention_mask_expanded).pow(self.p).sum(self.dim)
+        ret = x / attention_mask_expanded.sum(self.dim).clip(min=self.eps)
+        ret = ret.pow(1 / self.p)
+        return ret
+
+
 class CustomModel(nn.Module):
     def __init__(self, cfg, config_path=None, pretrained=False):
         super().__init__()
@@ -99,6 +116,13 @@ class CustomModel(nn.Module):
             self.model = AutoModel.from_pretrained(cfg.model_name, config=self.config)
         else:
             self.model = AutoModel(self.config)
+
+        # freeze layers
+        if cfg.freeze_layers > 0:
+            print(f"Freezing First {cfg.freeze_layers} Layers ...")
+            for i, layer in enumerate(self.model.encoder.layer[:2]):
+                for param in layer.parameters():
+                    param.requires_grad = False
 
         if self.cfg.gradient_checkpointing:
             self.model.gradient_checkpointing_enable()
@@ -132,8 +156,9 @@ class CustomModel(nn.Module):
             self.pooling = WeightedLayerPooling(
                 self.config.num_hidden_layers, layer_start=self.cfg.weightedlayer_start, layer_weights=None
             )
-
-            # 今回は2個の連続値を予測するので、出力次元は2
+        elif self.cfg.pooling == "gem":
+            self.pooling = GeMText()
+        # 今回は2個の連続値を予測するので、出力次元は2
         self.fc = nn.Linear(self.config.hidden_size, 2)
 
         self._init_weights(self.fc)

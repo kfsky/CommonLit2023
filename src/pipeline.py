@@ -94,6 +94,19 @@ def create_data(input_path: str, is_train: bool = True) -> pd.DataFrame:
 
     output_df = pd.merge(prompt_df, summary_df, on="prompt_id", how="left")
 
+    # jsonファイル（typoの修正）を読み込む
+    # 改善しなかったので一旦コメントアウト
+    # with open("conf/typo.json", "r") as f:
+    #     typo_dict = json.load(f)
+
+    # typoの修正
+    # 改善しなかったので一旦コメントアウト
+    # print("modify typo")
+    # output_df["text"] = output_df["text"].replace(typo_dict, regex=True)
+    # # check
+    # if len(output_df[output_df["text"].str.contains("ineretsed")]) > 0:
+    #     print("fixed typo")
+
     return output_df
 
 

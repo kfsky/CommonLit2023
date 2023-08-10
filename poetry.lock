@@ -2166,6 +2166,31 @@ extra = ["lxml (>=4.6)", "pydot (>=1.4.2)", "pygraphviz (>=1.10)", "sympy (>=1.1
 test = ["codecov (>=2.1)", "pytest (>=7.2)", "pytest-cov (>=4.0)"]
 
 [[package]]
+name = "nltk"
+version = "3.8.1"
+description = "Natural Language Toolkit"
+optional = false
+python-versions = ">=3.7"
+files = [
+    {file = "nltk-3.8.1-py3-none-any.whl", hash = "sha256:fd5c9109f976fa86bcadba8f91e47f5e9293bd034474752e92a520f81c93dda5"},
+    {file = "nltk-3.8.1.zip", hash = "sha256:1834da3d0682cba4f2cede2f9aad6b0fafb6461ba451db0efb6f9c39798d64d3"},
+]
+
+[package.dependencies]
+click = "*"
+joblib = "*"
+regex = ">=2021.8.3"
+tqdm = "*"
+
+[package.extras]
+all = ["matplotlib", "numpy", "pyparsing", "python-crfsuite", "requests", "scikit-learn", "scipy", "twython"]
+corenlp = ["requests"]
+machine-learning = ["numpy", "python-crfsuite", "scikit-learn", "scipy"]
+plot = ["matplotlib"]
+tgrep = ["pyparsing"]
+twitter = ["twython"]
+
+[[package]]
 name = "nodeenv"
 version = "1.8.0"
 description = "Node.js virtual environment builder"
@@ -2757,6 +2782,17 @@ files = [
 
 [package.extras]
 diagrams = ["jinja2", "railroad-diagrams"]
+
+[[package]]
+name = "pyspellchecker"
+version = "0.7.2"
+description = "Pure python spell checker based on work by Peter Norvig"
+optional = false
+python-versions = ">=3.6"
+files = [
+    {file = "pyspellchecker-0.7.2-py3-none-any.whl", hash = "sha256:b5ef23437702b8d03626f814b9646779b572d378b325ad252d8a8e616b3d76db"},
+    {file = "pyspellchecker-0.7.2.tar.gz", hash = "sha256:bc51ffb2c18ba26eaa1340756ebf96d0d886ed6a31d6f8e7a0094ad49d24550a"},
+]
 
 [[package]]
 name = "pytest"
@@ -4323,4 +4359,4 @@ testing = ["big-O", "jaraco.functools", "jaraco.itertools", "more-itertools", "p
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.10"
-content-hash = "cd0bd1978e172a7b9298a3293ec23c42291e8499a92e214175baf0007a5ece4b"
+content-hash = "7e3c6c36f331cbc95dcef4595d7ae111260aea28b8a8dfc93e030fb8340f9c2e"

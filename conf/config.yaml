@@ -11,6 +11,7 @@ model_name: microsoft/deberta-v3-base
 pooling: mean
 weightedlayer_start: 1
 reinit_layers: 0
+freeze_layers: 2
 gradient_checkpointing: True
 apex: True
 output_dir: outputs
