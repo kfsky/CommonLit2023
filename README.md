@@ -11,6 +11,22 @@ https://www.kaggle.com/competitions/commonlit-evaluate-student-summaries
 このデータセットは、3年生から12年生までの生徒が、さまざまなトピックやジャンルの文章について書いた約24,000の要約で構成されている。これらの要約には、
 内容と言い回しの両方についてスコアが割り当てられている。このコンペティションの目的は、未知のトピックに関する要約の内容と語句の得点を予測することである。
 
+## 目的変数の算出方法
+### Content
+- How well did the summary capture the main idea of the source.(要約は出典の主旨をどの程度捉えていたか。)
+
+- How accurately did the summary capture the details from the source.(要約は出典の詳細をどの程度正確に捉えていたか。)
+
+- How well did the summary transition from one idea to the next.(要約は1つのアイデアから次のアイデアにどれだけうまく移行したか。)
+
+### Wording
+- Was the summary written using objective language.(要約は客観的な言葉を使って書かれていたか。)
+
+- Is the summary appropriately paraphrased.(要約は適切に言い換えられているか)
+
+- How well did the summary use texts and syntax.(要約は文章と構文をどの程度うまく使っているか。)
+
+
 ## Pipeline
 以下のように実行すればよい
 ```commandline
@@ -51,15 +67,39 @@ full textの与え方が問題なのか？debertaのモデルとしては基本�
 #### 2023/8/7
 freeze layerに影響が出るのかを検討する。
 
-| freeze layer |CV|LB|
-|--------------|---|---|
-| 0(exp020)    |0.535|0.535|
-| 2(exp025)    |0.584|0.535|
-| 3(exp026)    |0.584|0.535|
-| 4(exp027)    |0.584|0.535|
-| 5(exp028)    |0.584|0.535|
+| freeze layer | CV    | LB    |
+|--------------|-------|-------|
+| 0(exp020)    | 0.557 | 0.491 |
+| 2(exp025)    | 0.584 | 0.506 |
+| 3(exp026)    | 0.563 | 0.496 |
+| 4(exp027)    | 0.583 | 0.506 |
+| 5(exp028)    | 0.582 | 0.497 |
 
+結果としてはfreeze layer=3で最もLBは良かったけど、seedごとのCVの分布が大きいので、freezeしないほうがいいかもしれない。
 
-```
-poetry run python src/pipeline.py experiment_name=029 model_name=microsoft/deberta-v3-base freeze_layer=3 split.name=GroupKFold dataset.params.max_len=1532 loss.name=MCRMSELoss
-```
+#### 2023/8/12
+seedごとのばらつきが発生するので、seed値を複数使って学習。0.01くらいは変動してしまうので、3seedの平均で考える必要がありそう。
+inferenceのほうもseed averageで行うほうがいいのかはわからない。
+
+typoを修正するとスコアが悪化する。typoは特に気にしないで採点しているのか？
+
+-> なんでなのかよくわかっていない。
+
+各foldでのスコアのばらつきが大きい（目的変数の分布が異なっている）ので、publicLBがどのfoldの目的変数の分布に似ているのかを確認してみる。
+exp018(deberta-v3-large)で結果を確認
+
+| fold | CV    | LB    |
+|--------------|-------|-------|
+| 0    | 0.504 | 0.497 |
+| 1    | 0.651 | 0.504 |
+| 2    | 0.499 | 0.514 |
+| 3    | 0.592 | 0.504 |
+| 0, 2    | - | 0.488 |
+| total    | 0.562 | 0.488 |
+
+fold1の分布に近い模様。テストデータは17,000であり、その18%がpublicLBなので、データ件数としては3060件。このデータがfold0に近い分布の模様。
+ただし、残りのデータが同じ分布との限らない気がするので、各foldの平均をとるのはいいのかも？（fold3のデータが極端なので、そのデータは除外してみるのもいいかもしれない）
+
+# 2023/8/13
+sentence の与え方について検討してなかったので、もう少し考えてみる。textから入力することを考えていなかったので、それで改善するのか確認する。
+

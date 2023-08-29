@@ -3,6 +3,7 @@ import json
 import math
 import os
 import pickle
+import random
 import re
 import time
 import warnings
@@ -31,9 +32,9 @@ import hydra
 import mlflow
 from omegaconf import DictConfig, OmegaConf, open_dict
 
-from criterion import MCRMSELoss, RMSELoss, WeightedMSELoss, WeightedSmoothL1Loss
+from criterion import MCRMSELoss, RMSELoss, WeightedMSELoss, WeightedRMSELoss, WeightedSmoothL1Loss
 from models import CustomModel
-from utils import AverageMeter, asMinutes, get_score, log_params_from_omegaconf_dict, seed_everything, timeSince
+from utils import AWP, AverageMeter, asMinutes, get_score, log_params_from_omegaconf_dict, seed_everything, timeSince
 
 # 設定
 os.environ["TOKENIZERS_PARALLELISM"] = "true"
@@ -114,14 +115,21 @@ def create_text(input_df, tokenizer, cfg):
     output_df = input_df.copy()
     sep = tokenizer.sep_token
 
+    # テキストのみ
     if cfg.use_text == "text":
         output_df["full_text"] = output_df["text"]
+
+    # 質問とテキスト
     elif cfg.use_text == "prompt_question_and_text":
         output_df["full_text"] = output_df["prompt_question"] + sep + output_df["text"]
+
+    # 質問とタイトルとテキスト
     elif cfg.use_text == "prompt_question_title_text":
         output_df["full_text"] = (
             output_df["prompt_question"] + sep + output_df["prompt_title"] + sep + output_df["text"]
         )
+
+    # 目的変数を先頭に追加
     elif cfg.use_text == "target_prompt_question_title_text":
         output_df["full_text"] = (
             "content wording "
@@ -132,22 +140,23 @@ def create_text(input_df, tokenizer, cfg):
             + sep
             + output_df["text"]
         )
-    elif cfg.use_text == "text_question_title_text_summary":
-        output_df["full_text"] = (
-            output_df["prompt_question"]
-            + sep
-            + output_df["prompt_title"]
-            + sep
-            + output_df["text"]
-            + sep
-            + output_df["prompt_text"]
-        )
+    elif cfg.use_text == "text_question_promt_title":
+        output_df["full_text"] = output_df["text"] + sep + output_df["prompt_question"] + sep + output_df["prompt_text"]
         # 改行文は文章の区切りのように使用している可能性があるので、別文字で置換する（本来は別トークンを用意するべき）
         output_df["full_text"] = output_df["full_text"].str.replace("\n\n", "|")
         output_df["full_text"] = output_df["full_text"].str.replace("\r\n", "|")
 
         # 一部の改行\nは削除するようにする
         output_df["full_text"] = output_df["full_text"].str.replace("\n", "")
+
+    elif cfg.use_text == "text_question":
+        # テキストを先頭にしてみる
+        output_df["full_text"] = output_df["text"] + sep + output_df["prompt_question"]
+
+    elif cfg.use_text == "text_question_title":
+        output_df["full_text"] = (
+            output_df["text"] + sep + output_df["prompt_question"] + sep + output_df["prompt_title"]
+        )
     else:
         output_df["full_text"] = output_df["text"]
 
@@ -156,6 +165,9 @@ def create_text(input_df, tokenizer, cfg):
 
 def train_fn(train_loader, model, criterion, optimizer, scheduler, epoch, cfg, log_var_l=None, weighted_criterion=None):
     model.train()
+    # AWP
+    if cfg.use_awp:
+        awp = AWP(model, criterion, optimizer, adv_lr=cfg.awp.params.lr, adv_eps=cfg.awp.params.eps)
     scaler = torch.cuda.amp.GradScaler(enabled=True)
     losses = AverageMeter()
     start = end = time.time()
@@ -186,6 +198,13 @@ def train_fn(train_loader, model, criterion, optimizer, scheduler, epoch, cfg, l
 
         scaler.scale(loss).backward()
         grad_norm = nn.utils.clip_grad_norm_(model.parameters(), cfg.max_grad_norm)
+
+        # AWP attack
+        if cfg.use_awp:
+            if cfg.awp.start_epoch <= epoch:
+                loss = awp.attack_backward(inputs, labels)
+                scaler.scale(loss).backward()
+                awp._restore()  # WPする前のモデルに復元
 
         if (step + 1) % cfg.gradient_accumulation_steps == 0:
             scaler.step(optimizer)
@@ -321,27 +340,80 @@ def train_loop(folds, fold, cfg, tokenizer):
         ]
         return optimizer_parameters
 
-    optimizer_parameters = get_optimizer_params(
-        model, cfg.optimizer.params.lr, cfg.optimizer.params.lr, cfg.optimizer.params.weight_decay
-    )
-    log_var_l = [
-        {
-            "params": [torch.zeros((1,), requires_grad=True, device=DEVICE) for i in range(2)],
-            "lr": cfg.optimizer.params.lr,
-            "weight_decay": 0.0,
-        },
-    ]
-    if cfg.loss.name == "WeightedMSELoss":
-        optimizer_parameters += log_var_l
-    else:
-        optimizer_parameters = optimizer_parameters
+    # llrd
+    def get_optimizer_grouped_parameters(model, layerwise_lr, layerwise_weight_decay, layerwise_lr_decay):
+        no_decay = ["bias", "LayerNorm.weight"]
+        # initialize lr for task specific layer
+        optimizer_grouped_parameters = [
+            {
+                "params": [p for n, p in model.named_parameters() if "model" not in n],
+                "weight_decay": 0.0,
+                "lr": layerwise_lr,
+            },
+        ]
+        # initialize lrs for every layer
+        layers = [model.model.embeddings] + list(model.model.encoder.layer)
+        layers.reverse()
+        lr = layerwise_lr
+        for layer in layers:
+            optimizer_grouped_parameters += [
+                {
+                    "params": [p for n, p in layer.named_parameters() if not any(nd in n for nd in no_decay)],
+                    "weight_decay": layerwise_weight_decay,
+                    "lr": lr,
+                },
+                {
+                    "params": [p for n, p in layer.named_parameters() if any(nd in n for nd in no_decay)],
+                    "weight_decay": 0.0,
+                    "lr": lr,
+                },
+            ]
+            lr *= layerwise_lr_decay
+        return optimizer_grouped_parameters
 
-    optimizer = AdamW(
-        optimizer_parameters,
-        lr=cfg.optimizer.params.lr,
-        eps=cfg.optimizer.params.eps,
-        betas=(cfg.optimizer.params.betas_min, cfg.optimizer.params.betas_max),
-    )
+    # optimizer
+    if cfg.use_llrd:
+        from transformers import AdamW
+
+        grouped_optimizer_params = get_optimizer_grouped_parameters(
+            model,
+            cfg.llrd.params.layerwise_lr,
+            cfg.llrd.params.layerwise_weight_decay,
+            cfg.llrd.params.layerwise_lr_decay,
+        )
+
+        optimizer = AdamW(
+            grouped_optimizer_params,
+            lr=cfg.llrd.params.layerwise_lr,
+            eps=cfg.llrd.params.layerwise_adam_epsilon,
+            correct_bias=not cfg.llrd.params.layerwise_use_bertadam,
+        )
+
+    else:
+        from torch.optim import AdamW
+
+        optimizer_parameters = get_optimizer_params(
+            model, cfg.optimizer.params.lr, cfg.optimizer.params.lr, cfg.optimizer.params.weight_decay
+        )
+
+        log_var_l = [
+            {
+                "params": [torch.zeros((1,), requires_grad=True, device=DEVICE) for i in range(2)],
+                "lr": cfg.optimizer.params.lr,
+                "weight_decay": 0.0,
+            },
+        ]
+        if cfg.loss.name == "WeightedMSELoss":
+            optimizer_parameters += log_var_l
+        else:
+            optimizer_parameters = optimizer_parameters
+
+        optimizer = AdamW(
+            optimizer_parameters,
+            lr=cfg.optimizer.params.lr,
+            eps=cfg.optimizer.params.eps,
+            betas=(cfg.optimizer.params.betas_min, cfg.optimizer.params.betas_max),
+        )
 
     # scheduler
     def get_scheduler(cfg, optimizer, num_train_steps):
@@ -381,6 +453,8 @@ def train_loop(folds, fold, cfg, tokenizer):
         weighted_criterion = WeightedMSELoss()
     elif cfg.loss.name == "WeightedSmoothL1Loss":
         criterion = WeightedSmoothL1Loss()
+    elif cfg.loss.name == "WeightedRMSELoss":
+        criterion = WeightedRMSELoss()
     else:
         criterion = nn.MSELoss(reduction="mean")
 

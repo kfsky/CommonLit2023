@@ -81,3 +81,29 @@ class WeightedSmoothL1Loss(nn.Module):
 
         loss = torch.sum(loss * self.target_weights)
         return loss
+
+
+class WeightedRMSELoss(nn.Module):
+    def __init__(self, target_weights=[0.3, 0.7], reduction="mean", eps=1e-9):
+        super().__init__()
+        self.mse = nn.MSELoss(reduction="none")
+        self.reduction = reduction
+        self.eps = eps
+        self.target_weights = torch.Tensor(target_weights).cuda()
+
+    def forward(self, y_pred, y_true):
+        # Compute per-element RMSE
+        per_element_loss = torch.sqrt(self.mse(y_pred, y_true) + self.eps)
+
+        # Apply target weights
+        weighted_loss = per_element_loss * self.target_weights
+
+        # Apply reduction
+        if self.reduction == "none":
+            loss = weighted_loss
+        elif self.reduction == "mean":
+            loss = weighted_loss.mean()
+        elif self.reduction == "sum":
+            loss = weighted_loss.sum()
+
+        return loss

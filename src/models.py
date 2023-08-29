@@ -98,12 +98,58 @@ class GeMText(nn.Module):
         return ret
 
 
+class MeanMaxPooling(nn.Module):
+    def __init__(self):
+        super(MeanMaxPooling, self).__init__()
+
+        self.mean_pooling = MeanPooling()
+        self.max_pooling = MaxPooling()
+
+    def forward(self, last_hidden_state, attention_mask):
+        mean_pooling = self.mean_pooling(last_hidden_state, attention_mask)
+        max_pooling = self.max_pooling(last_hidden_state, attention_mask)
+        out = torch.cat([mean_pooling, max_pooling], dim=1)
+
+        return out
+
+
+class LSTMPooling(nn.Module):
+    def __init__(self, num_layers, hidden_size, hiddendim_lstm=256):
+        super(LSTMPooling, self).__init__()
+        self.num_hidden_layers = num_layers
+        self.hidden_size = hidden_size
+        self.hiddendim_lstm = hiddendim_lstm
+        self.lstm = nn.LSTM(self.hidden_size, self.hiddendim_lstm, batch_first=True)
+        self.dropout = nn.Dropout(0.1)
+
+    def forward(self, all_hidden_states):
+        ## forward
+        hidden_states = torch.stack(
+            [all_hidden_states[layer_i][:, 0].squeeze() for layer_i in range(1, self.num_hidden_layers + 1)], dim=-1
+        )
+        hidden_states = hidden_states.view(-1, self.num_hidden_layers, self.hidden_size)
+        out, _ = self.lstm(hidden_states, None)
+        out = self.dr
+
+        return out
+
+
 class CustomModel(nn.Module):
     def __init__(self, cfg, config_path=None, pretrained=False):
         super().__init__()
         self.cfg = cfg
         if config_path is None:
             self.config = AutoConfig.from_pretrained(cfg.model_name, output_hidden_states=True)
+            # robertaだと、max_position_embeddingsが514(512+2)になっているので、これを増やす。
+            if "roberta" in cfg.model_name or "albert" in cfg.model_name:
+                print(f"Roberta Model!, Change max_position_embeddings 514 -> {cfg.dataset.params.max_len}")
+                self.config.update(
+                    {
+                        "position_embedding_type": None,
+                        "max_position_embeddings": cfg.dataset.params.max_len,
+                    }
+                )
+
             self.config.hidden_dropout = 0.0
             self.config.hidden_dropout_prob = 0.0
             self.config.attention_dropout = 0.0
@@ -113,7 +159,10 @@ class CustomModel(nn.Module):
             self.config = torch.load(config_path)
 
         if pretrained:
-            self.model = AutoModel.from_pretrained(cfg.model_name, config=self.config)
+            if "roberta" or "albert" in cfg.model_name:
+                self.model = AutoModel.from_pretrained(cfg.model_name, config=self.config, ignore_mismatched_sizes=True)
+            else:
+                self.model = AutoModel.from_pretrained(cfg.model_name, config=self.config)
         else:
             self.model = AutoModel(self.config)
 
@@ -127,6 +176,7 @@ class CustomModel(nn.Module):
         if self.cfg.gradient_checkpointing:
             self.model.gradient_checkpointing_enable()
 
+        # reinit layers
         if cfg.reinit_layers > 0:
             print(f"Reinitializing Last {cfg.reinit_layers} Layers ...")
             for layer in self.model.encoder.layer[-cfg.reinit_layers :]:
@@ -144,6 +194,7 @@ class CustomModel(nn.Module):
                         module.weight.data.fill_(1.0)
             print("Done.!")
 
+        # Pooling
         if self.cfg.pooling == "mean":
             self.pooling = MeanPooling()
         elif self.cfg.pooling == "max":
@@ -158,8 +209,18 @@ class CustomModel(nn.Module):
             )
         elif self.cfg.pooling == "gem":
             self.pooling = GeMText()
+        elif self.cfg.pooling == "meanmax":
+            self.pooling = MeanMaxPooling()
+        elif self.cfg.pooling == "lstm":
+            self.pooling = LSTMPooling(self.config.num_hidden_layers, self.config.hidden_size)
+        else:
+            self.pooling = MeanPooling()
+
         # 今回は2個の連続値を予測するので、出力次元は2
-        self.fc = nn.Linear(self.config.hidden_size, 2)
+        if self.cfg.pooling == "meanmax":
+            self.fc = nn.Linear(self.config.hidden_size * 2, 2)
+        else:
+            self.fc = nn.Linear(self.config.hidden_size, 2)
 
         self._init_weights(self.fc)
 
