@@ -18,6 +18,7 @@ transformers = "=4.30.2"
 sentencepiece = "^0.1.99"
 protobuf = "3.19.4"
 iterative-stratification = "^0.1.7"
+xformers = "^0.0.21"
 
 [tool.poetry.group.dev.dependencies]
 black = "^23.3.0"

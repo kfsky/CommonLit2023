@@ -141,7 +141,7 @@ class CustomModel(nn.Module):
         if config_path is None:
             self.config = AutoConfig.from_pretrained(cfg.model_name, output_hidden_states=True)
             # robertaだと、max_position_embeddingsが514(512+2)になっているので、これを増やす。
-            if "roberta" in cfg.model_name or "albert" in cfg.model_name:
+            if cfg.model_name == "roberta-large" or cfg.model_name == "roberta-base" or "albert" in cfg.model_name:
                 print(f"Roberta Model!, Change max_position_embeddings 514 -> {cfg.dataset.params.max_len}")
                 self.config.update(
                     {
@@ -159,7 +159,7 @@ class CustomModel(nn.Module):
             self.config = torch.load(config_path)
 
         if pretrained:
-            if "roberta" or "albert" in cfg.model_name:
+            if cfg.model_name == "roberta-large" or cfg.model_name == "roberta-base" or "albert" in cfg.model_name:
                 self.model = AutoModel.from_pretrained(cfg.model_name, config=self.config, ignore_mismatched_sizes=True)
             else:
                 self.model = AutoModel.from_pretrained(cfg.model_name, config=self.config)
@@ -169,7 +169,7 @@ class CustomModel(nn.Module):
         # freeze layers
         if cfg.freeze_layers > 0:
             print(f"Freezing First {cfg.freeze_layers} Layers ...")
-            for i, layer in enumerate(self.model.encoder.layer[:2]):
+            for i, layer in enumerate(self.model.encoder.layer[: cfg.freeze_layers]):
                 for param in layer.parameters():
                     param.requires_grad = False
 

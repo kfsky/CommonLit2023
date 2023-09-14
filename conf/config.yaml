@@ -82,7 +82,7 @@ awp:
 llrd:
   params:
     layerwise_lr: 2e-5
-    layerwise_lr_decay: 0.9
+    layerwise_lr_decay: 0.95
     layerwise_weight_decay: 0.01
     layerwise_adam_epsilon: 1e-6
     layerwise_use_bertadam: False

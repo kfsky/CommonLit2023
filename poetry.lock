@@ -4342,6 +4342,28 @@ files = [
 ]
 
 [[package]]
+name = "xformers"
+version = "0.0.21"
+description = "XFormers: A collection of composable Transformer building blocks."
+optional = false
+python-versions = ">=3.7"
+files = [
+    {file = "xformers-0.0.21-cp310-cp310-manylinux2014_x86_64.whl", hash = "sha256:b26624c9ff22fde84f5a5a466eb186f0b4d531ac096a9ceeb85c26289f94c325"},
+    {file = "xformers-0.0.21-cp310-cp310-win_amd64.whl", hash = "sha256:15118aeb0d31158a0a75850cd8c5198873fdfbe7716e64b92f94b63a6d22cdc9"},
+    {file = "xformers-0.0.21-cp311-cp311-manylinux2014_x86_64.whl", hash = "sha256:de8497641db469a91fcda618387201fd657916ca11c1dee51fdc45a3249e4090"},
+    {file = "xformers-0.0.21-cp311-cp311-win_amd64.whl", hash = "sha256:55a67f1066d1e665e2c85380c12cfdfc52f8bf5758e97a1b47afa48687ae56be"},
+    {file = "xformers-0.0.21-cp38-cp38-manylinux2014_x86_64.whl", hash = "sha256:2c6525d589c364dea43df697b36a491e88d65afe9e29484f60e9148562c099d0"},
+    {file = "xformers-0.0.21-cp38-cp38-win_amd64.whl", hash = "sha256:ef858264853c58cb382230be70262f2715a276200026217ca5daaaefc9396347"},
+    {file = "xformers-0.0.21-cp39-cp39-manylinux2014_x86_64.whl", hash = "sha256:f05cd015794703e17f97e9bbb55d8847b6cadd3b5e3d5aa13b25ec446f5df94c"},
+    {file = "xformers-0.0.21-cp39-cp39-win_amd64.whl", hash = "sha256:61f162519e637dba8debce9e148e222cedf40bc831ef46df8691c0b66018393a"},
+    {file = "xformers-0.0.21.tar.gz", hash = "sha256:50e536f4a6bff7acf16ae697990d5e5b3634bbcaf784ff19cffb9cc5cda5bbf3"},
+]
+
+[package.dependencies]
+numpy = "*"
+torch = "2.0.1"
+
+[[package]]
 name = "zipp"
 version = "3.16.2"
 description = "Backport of pathlib-compatible object wrapper for zip files"
@@ -4359,4 +4381,4 @@ testing = ["big-O", "jaraco.functools", "jaraco.itertools", "more-itertools", "p
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.10"
-content-hash = "7e3c6c36f331cbc95dcef4595d7ae111260aea28b8a8dfc93e030fb8340f9c2e"
+content-hash = "6ae8ed62dd93d9dfdd5d825952da9b23a81da08ab3c9eb0ff221c06c773c9219"

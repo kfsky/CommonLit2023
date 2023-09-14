@@ -5,6 +5,7 @@ import os
 import pickle
 import random
 import re
+import string
 import time
 import warnings
 
@@ -40,6 +41,140 @@ from utils import AWP, AverageMeter, asMinutes, get_score, log_params_from_omega
 os.environ["TOKENIZERS_PARALLELISM"] = "true"
 os.environ["HYDRA_FULL_ERROR"] = "1"
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+
+def decontraction(phrase):
+    phrase = re.sub(r"won\'t", "will not", phrase)
+    phrase = re.sub(r"can\'t", "can not", phrase)
+    phrase = re.sub(r"n\'t", " not", phrase)
+    phrase = re.sub(r"\'re", " are", phrase)
+    phrase = re.sub(r"\'s", " is", phrase)
+    phrase = re.sub(r"\'d", " would", phrase)
+    phrase = re.sub(r"\'ll", " will", phrase)
+    phrase = re.sub(r"\'t", " not", phrase)
+    phrase = re.sub(r"\'ve", " have", phrase)
+    phrase = re.sub(r"\'m", " am", phrase)
+    phrase = re.sub(r"he's", "he is", phrase)
+    phrase = re.sub(r"there's", "there is", phrase)
+    phrase = re.sub(r"We're", "We are", phrase)
+    phrase = re.sub(r"That's", "That is", phrase)
+    phrase = re.sub(r"won't", "will not", phrase)
+    phrase = re.sub(r"they're", "they are", phrase)
+    phrase = re.sub(r"Can't", "Cannot", phrase)
+    phrase = re.sub(r"wasn't", "was not", phrase)
+    phrase = re.sub(r"don\x89Ûªt", "do not", phrase)
+    phrase = re.sub(r"donãât", "do not", phrase)
+    phrase = re.sub(r"aren't", "are not", phrase)
+    phrase = re.sub(r"isn't", "is not", phrase)
+    phrase = re.sub(r"What's", "What is", phrase)
+    phrase = re.sub(r"haven't", "have not", phrase)
+    phrase = re.sub(r"hasn't", "has not", phrase)
+    phrase = re.sub(r"There's", "There is", phrase)
+    phrase = re.sub(r"He's", "He is", phrase)
+    phrase = re.sub(r"It's", "It is", phrase)
+    phrase = re.sub(r"You're", "You are", phrase)
+    phrase = re.sub(r"I'M", "I am", phrase)
+    phrase = re.sub(r"shouldn't", "should not", phrase)
+    phrase = re.sub(r"wouldn't", "would not", phrase)
+    phrase = re.sub(r"i'm", "I am", phrase)
+    phrase = re.sub(r"I\x89Ûªm", "I am", phrase)
+    phrase = re.sub(r"I'm", "I am", phrase)
+    phrase = re.sub(r"Isn't", "is not", phrase)
+    phrase = re.sub(r"Here's", "Here is", phrase)
+    phrase = re.sub(r"you've", "you have", phrase)
+    phrase = re.sub(r"you\x89Ûªve", "you have", phrase)
+    phrase = re.sub(r"we're", "we are", phrase)
+    phrase = re.sub(r"what's", "what is", phrase)
+    phrase = re.sub(r"couldn't", "could not", phrase)
+    phrase = re.sub(r"we've", "we have", phrase)
+    phrase = re.sub(r"it\x89Ûªs", "it is", phrase)
+    phrase = re.sub(r"doesn\x89Ûªt", "does not", phrase)
+    phrase = re.sub(r"It\x89Ûªs", "It is", phrase)
+    phrase = re.sub(r"Here\x89Ûªs", "Here is", phrase)
+    phrase = re.sub(r"who's", "who is", phrase)
+    phrase = re.sub(r"I\x89Ûªve", "I have", phrase)
+    phrase = re.sub(r"y'all", "you all", phrase)
+    phrase = re.sub(r"can\x89Ûªt", "cannot", phrase)
+    phrase = re.sub(r"would've", "would have", phrase)
+    phrase = re.sub(r"it'll", "it will", phrase)
+    phrase = re.sub(r"we'll", "we will", phrase)
+    phrase = re.sub(r"wouldn\x89Ûªt", "would not", phrase)
+    phrase = re.sub(r"We've", "We have", phrase)
+    phrase = re.sub(r"he'll", "he will", phrase)
+    phrase = re.sub(r"Y'all", "You all", phrase)
+    phrase = re.sub(r"Weren't", "Were not", phrase)
+    phrase = re.sub(r"Didn't", "Did not", phrase)
+    phrase = re.sub(r"they'll", "they will", phrase)
+    phrase = re.sub(r"they'd", "they would", phrase)
+    phrase = re.sub(r"DON'T", "DO NOT", phrase)
+    phrase = re.sub(r"That\x89Ûªs", "That is", phrase)
+    phrase = re.sub(r"they've", "they have", phrase)
+    phrase = re.sub(r"i'd", "I would", phrase)
+    phrase = re.sub(r"should've", "should have", phrase)
+    phrase = re.sub(r"You\x89Ûªre", "You are", phrase)
+    phrase = re.sub(r"where's", "where is", phrase)
+    phrase = re.sub(r"Don\x89Ûªt", "Do not", phrase)
+    phrase = re.sub(r"we'd", "we would", phrase)
+    phrase = re.sub(r"i'll", "I will", phrase)
+    phrase = re.sub(r"weren't", "were not", phrase)
+    phrase = re.sub(r"They're", "They are", phrase)
+    phrase = re.sub(r"Can\x89Ûªt", "Cannot", phrase)
+    phrase = re.sub(r"you\x89Ûªll", "you will", phrase)
+    phrase = re.sub(r"I\x89Ûªd", "I would", phrase)
+    phrase = re.sub(r"let's", "let us", phrase)
+    phrase = re.sub(r"it's", "it is", phrase)
+    phrase = re.sub(r"can't", "cannot", phrase)
+    phrase = re.sub(r"don't", "do not", phrase)
+    phrase = re.sub(r"you're", "you are", phrase)
+    phrase = re.sub(r"i've", "I have", phrase)
+    phrase = re.sub(r"that's", "that is", phrase)
+    phrase = re.sub(r"i'll", "I will", phrase)
+    phrase = re.sub(r"doesn't", "does not", phrase)
+    phrase = re.sub(r"i'd", "I would", phrase)
+    phrase = re.sub(r"didn't", "did not", phrase)
+    phrase = re.sub(r"ain't", "am not", phrase)
+    phrase = re.sub(r"you'll", "you will", phrase)
+    phrase = re.sub(r"I've", "I have", phrase)
+    phrase = re.sub(r"Don't", "do not", phrase)
+    phrase = re.sub(r"I'll", "I will", phrase)
+    phrase = re.sub(r"I'd", "I would", phrase)
+    phrase = re.sub(r"Let's", "Let us", phrase)
+    phrase = re.sub(r"you'd", "You would", phrase)
+    phrase = re.sub(r"It's", "It is", phrase)
+    phrase = re.sub(r"Ain't", "am not", phrase)
+    phrase = re.sub(r"Haven't", "Have not", phrase)
+    phrase = re.sub(r"Could've", "Could have", phrase)
+    phrase = re.sub(r"youve", "you have", phrase)
+    phrase = re.sub(r"donå«t", "do not", phrase)
+    return phrase
+
+
+def remove_punctuations(text):
+    for punctuation in list(string.punctuation):
+        text = text.replace(punctuation, "")
+    return text
+
+
+def clean_number(text):
+    text = re.sub(r"(\d+)([a-zA-Z])", "\g<1> \g<2>", text)
+    text = re.sub(r"(\d+) (th|st|nd|rd) ", "\g<1>\g<2> ", text)
+    text = re.sub(r"(\d+),(\d+)", "\g<1>\g<2>", text)
+    return text
+
+
+def clean_text(text):
+    text = decontraction(text)
+    # text = text.lower()
+    # text = re.sub(r"[^\w\s]", "", text, re.UNICODE)
+    return text
+
+
+def get_additional_special_tokens():
+    special_tokens_replacement = {
+        "\n": "[BR]",
+        "Paragraph": "[PARAGRAPH]",
+    }
+    return special_tokens_replacement
 
 
 def prepare_input(tokenizer, max_len, text):
@@ -111,9 +246,135 @@ def create_data(input_path: str, is_train: bool = True) -> pd.DataFrame:
     return output_df
 
 
+def len2text(text: str):
+    words = text.split()
+    word_count = len(words)
+
+    if word_count < 50:
+        return "Quite short"
+    if word_count < 100:
+        return "Short"
+    if word_count < 250:
+        return "Middle"
+    else:
+        return "Long"
+
+
 def create_text(input_df, tokenizer, cfg):
     output_df = input_df.copy()
     sep = tokenizer.sep_token
+    print(sep)
+
+    output_df["text_len_type"] = output_df["text"].apply(len2text)
+
+    # 前処理を行う
+    print("clean text")
+    output_df["text"] = output_df["text"].apply(lambda x: x.replace("     ", ""))
+    output_df["text"] = output_df["text"].apply(lambda x: x.replace("  ", " "))
+    output_df["text"] = output_df["text"].apply(lambda x: x.replace("&", "and"))
+    output_df["text"] = output_df["text"].apply(lambda x: x.replace("...", " "))
+    output_df["text"] = output_df["text"].apply(lambda x: x.replace(".....", " "))
+    output_df["text"] = output_df["text"].apply(lambda x: x.replace(" ,", ","))
+    output_df["text"] = output_df["text"].apply(lambda x: x.replace("--", ""))
+    output_df["text"] = output_df["text"].apply(lambda x: x.replace(" ", ""))
+    output_df["text"] = output_df["text"].apply(lambda x: x.replace("[i]", "i"))
+    output_df["text"] = output_df["text"].apply(lambda x: x.replace("[t]", "t"))
+    output_df["text"] = output_df["text"].apply(lambda x: x.replace("[A]", "A"))
+    output_df["text"] = output_df["text"].apply(lambda x: x.replace("[...]", ""))
+    # output_df["text"] = output_df["text"].apply(lambda x: x.replace("(CommonLit Staff)", ""))
+    # output_df["text"] = output_df["text"].apply(lambda x: x.replace("(CommonLit)", ""))
+    # output_df["text"] = output_df["text"].apply(lambda x: x.replace("(commonlit.org)", ""))
+    output_df["text"] = output_df["text"].str.replace(r"\(\d+\)", "", regex=True).str.strip()
+    output_df["text"] = output_df["text"].str.replace(r"\(\d+(-\d+)?\)", "", regex=True).str.strip()
+    output_df["text"] = output_df["text"].str.replace(r"\[\d+\]", "", regex=True).str.strip()
+    output_df["text"] = output_df["text"].str.replace(r"\[([^\]]+)\]", r"\1", regex=True)
+    # output_df["text"] = output_df["text"].str.replace(r"\(Commonlit \d+\)", "", regex=True)
+    # output_df["text"] = output_df["text"].str.replace(r"\(Commonlit Staff \d+\)", "", regex=True)
+
+    # パラグラフを参照している部分を特殊トークンに置換
+    output_df["text"] = output_df["text"].str.replace(r"\(paragraph \d+\)", "[PARAGRAPH]", regex=True)
+    output_df["text"] = output_df["text"].str.replace(r"\(Paragraph \d+\)", "[PARAGRAPH]", regex=True)
+    output_df["text"] = output_df["text"].str.replace(r"\(Paragraph \d+ and \d+\)", "[PARAGRAPH]", regex=True)
+    output_df["text"] = output_df["text"].str.replace(r"\(Paragraph\d+\)", "[PARAGRAPH]", regex=True)
+    output_df["text"] = output_df["text"].str.replace(r"\(par \d+\)", "[PARAGRAPH]", regex=True)
+    output_df["text"] = output_df["text"].str.replace(r"\(para \d+\)", "[PARAGRAPH]", regex=True)
+    output_df["text"] = output_df["text"].str.replace(r"\(par.\d+\)", "[PARAGRAPH]", regex=True)
+    output_df["text"] = output_df["text"].str.replace(r"\(par. \d+\)", "[PARAGRAPH]", regex=True)
+    output_df["text"] = output_df["text"].str.replace(r"\(Par \d+\)", "[PARAGRAPH]", regex=True)
+    output_df["text"] = output_df["text"].str.replace(r"\(Paragraph \d+, lines \d+-\d+\)", "[PARAGRAPH]", regex=True)
+    output_df["text"] = output_df["text"].str.replace(r"\(Paragraphs \d+-\d+\)", "[PARAGRAPH]", regex=True)
+    output_df["text"] = output_df["text"].str.replace(r"\(paragraphs \d+,\d+,\d+\)", "[PARAGRAPH]", regex=True)
+
+    # 文章中を参照している部分を特殊トークンに（パラグラフと同じ扱いでいいのか？）
+    output_df["text"] = output_df["text"].str.replace(r"\(line \d+\)", "[PARAGRAPH]", regex=True)
+    output_df["text"] = output_df["text"].str.replace(r"\(Line \d+-\d+\)", "[PARAGRAPH]", regex=True)
+    output_df["text"] = output_df["text"].str.replace(r"\(Lines \d+-\d+\)", "[PARAGRAPH]", regex=True)
+    output_df["text"] = output_df["text"].str.replace(r"\(paragraph \d+-\d+\)", "[PARAGRAPH]", regex=True)
+
+    # ラインとパラグラフを参照している部分を特殊トークンに（パラグラフと同じ扱いでいいのか？）
+    output_df["text"] = output_df["text"].str.replace(r"\(paragraph \d+ line \d+\)", "[PARAGRAPH]", regex=True)
+    output_df["text"] = output_df["text"].str.replace(r"\(PA \d+ L \d+\)", "[PARAGRAPH]", regex=True)
+
+    # 著者情報を特殊トークンにする
+    output_df["text"] = output_df["text"].apply(lambda x: x.replace("(CommonLit Staff)", "[AUTHOR]"))
+    output_df["text"] = output_df["text"].apply(lambda x: x.replace("(CommonLit)", "[AUTHOR]"))
+    output_df["text"] = output_df["text"].apply(lambda x: x.replace("(commonlit.org)", "[AUTHOR]"))
+    output_df["text"] = output_df["text"].str.replace(r"\(Commonlit \d+\)", "[AUTHOR]", regex=True)
+    output_df["text"] = output_df["text"].str.replace(r"\(Commonlit Staff \d+\)", "[AUTHOR]", regex=True)
+    output_df["text"] = output_df["text"].apply(lambda x: x.replace("(commonlit.org)", ""))
+
+    output_df["text"] = output_df["text"].str.replace(r"\(The Third Wave \d+\)", "[AUTHOR]", regex=True)
+    output_df["text"] = output_df["text"].str.replace(r"\(The Third Wave \d+\)", "[AUTHOR]", regex=True)
+
+    output_df["text"] = output_df["text"].apply(lambda x: x.replace("(UShistory.org)", "[AUTHOR]"))
+    output_df["text"] = output_df["text"].str.replace(r"\(UShistory.org \d+\)", "[AUTHOR]", regex=True)
+    output_df["text"] = output_df["text"].str.replace(r"\(USHistory.org paragraph \d+\)", "[AUTHOR]", regex=True)
+
+    output_df["text"] = output_df["text"].apply(lambda x: x.replace("(Aristotle)", "[AUTHOR]"))
+    output_df["text"] = output_df["text"].str.replace(r"\(Aristotle \d+\)", "[AUTHOR]", regex=True)
+    output_df["text"] = output_df["text"].str.replace(r"\(Aristotle, \d+\)", "[AUTHOR]", regex=True)
+    output_df["text"] = output_df["text"].str.replace(r"\(Aristotle \d+-\d+\)", "[AUTHOR]", regex=True)
+
+    output_df["text"] = output_df["text"].apply(lambda x: x.replace("(Upton Sinclair)", "[AUTHOR]"))
+
+    # カンマのあとにスペース
+    output_df["text"] = output_df["text"].str.replace(r"(?<=[.,])(?=[^\s])", " ", regex=True)
+
+    output_df["text"] = output_df["text"].apply(clean_text)
+    output_df["text"] = output_df["text"].apply(lambda x: x.replace("  ", " "))  # もう一度
+
+    # output_df["text"] = output_df["text"].apply(remove_punctuations)
+    output_df["text"] = output_df["text"].apply(clean_number)
+    output_df["text"] = output_df["text"].apply(lambda x: x.replace("— ", ""))
+    output_df["text"] = output_df["text"].apply(lambda x: x.replace("; ", ","))
+    output_df["text"] = output_df["text"].apply(lambda x: x.replace(": ", ","))
+    output_df["text"] = output_df["text"].apply(lambda x: x.replace(" .", "."))
+
+    output_df["prompt_text"] = output_df["prompt_text"].apply(lambda x: x.replace("  ", " "))
+    output_df["prompt_text"] = output_df["prompt_text"].apply(clean_text)
+    # output_df["prompt_text"] = output_df["prompt_text"].apply(remove_punctuations)
+    output_df["prompt_text"] = output_df["prompt_text"].apply(clean_number)
+    output_df["prompt_text"] = output_df["prompt_text"].apply(lambda x: x.replace("— ", ""))
+    output_df["prompt_text"] = output_df["prompt_text"].apply(lambda x: x.replace("; ", ","))
+    output_df["prompt_text"] = output_df["prompt_text"].apply(lambda x: x.replace(": ", ","))
+
+    output_df["summarized_prompt_text"] = ""
+
+    # 要約文を追加
+    output_df.loc[
+        output_df["prompt_id"] == "39c16e", "summarized_prompt_text"
+    ] = "In discussing the construction of plots in Tragedy, Aristotle posits that an ideal tragedy should be complex and imitate actions that evoke both pity and fear. The central character should neither be wholly virtuous nor entirely wicked; instead, their downfall should arise from a significant error or frailty, like figures such as Oedipus. Additionally, while some tragedies might use a double plot thread for the sake of audience appeal, true tragic pleasure arises from single-threaded narratives where the change in fortune is from good to bad due to the character's error, rather than vice."
+    output_df.loc[
+        output_df["prompt_id"] == "3b9047", "summarized_prompt_text"
+    ] = "Egyptian society was hierarchically structured, with gods and pharaohs at the apex, believed to control the universe and possessing absolute power, respectively. The pharaoh's administrative responsibilities were overseen by a vizier and scribes, followed by powerful nobles and priests in status, who managed tributes and religious ceremonies. Soldiers, skilled workers, and merchants constituted the middle tiers, while farmers and slaves, who endured high taxes and labor demands, formed the base; yet, social mobility existed, allowing some to rise through education and bureaucratic roles."
+
+    output_df.loc[
+        output_df["prompt_id"] == "814d6b", "summarized_prompt_text"
+    ] = 'In 1967, history teacher Ron Jones conducted "The Third Wave" experiment at Cubberley High School in Palo Alto to demonstrate how individuals follow the crowd even when it leads to harmful actions. He introduced strict discipline and authoritarian rules, and within days, the movement grew from 30 to over 200 students, displaying extreme loyalty and discipline. However, sensing it was spiraling out of control, Jones ended the experiment by revealing its true purpose, emphasizing the dangers of blind obedience and superiority complexes.'
+
+    output_df.loc[
+        output_df["prompt_id"] == "ebad26", "summarized_prompt_text"
+    ] = "The family had direct knowledge of the meat industry's malpractices from working in Packingtown, revealing that spoiled meat was often canned or turned into sausage, and every part of a pig was used except its squeal. They learned of various deceitful methods such as using chemicals to alter the meat's appearance and taste, reprocessing rejected sausages from Europe, and creating hams with discarded parts. Extremely unsanitary conditions prevailed, with meat often contaminated by rat feces, poisoned rats, and other debris; this contaminated meat, combined with other waste, was regularly repackaged and sold to consumers after being chemically treated."
 
     # テキストのみ
     if cfg.use_text == "text":
@@ -126,7 +387,33 @@ def create_text(input_df, tokenizer, cfg):
     # 質問とタイトルとテキスト
     elif cfg.use_text == "prompt_question_title_text":
         output_df["full_text"] = (
-            output_df["prompt_question"] + sep + output_df["prompt_title"] + sep + output_df["text"]
+            output_df["prompt_question"]
+            + " "
+            + sep
+            + " "
+            + output_df["prompt_title"]
+            + " "
+            + sep
+            + " "
+            + output_df["text"]
+        )
+
+    # 質問とタイトルとテキスト
+    elif cfg.use_text == "type_prompt_question_title_text":
+        output_df["full_text"] = (
+            output_df["text_len_type"]
+            + " "
+            + sep
+            + " "
+            + output_df["prompt_question"]
+            + " "
+            + sep
+            + " "
+            + output_df["prompt_title"]
+            + " "
+            + sep
+            + " "
+            + output_df["text"]
         )
 
     # 目的変数を先頭に追加
@@ -140,15 +427,52 @@ def create_text(input_df, tokenizer, cfg):
             + sep
             + output_df["text"]
         )
-    elif cfg.use_text == "text_question_promt_title":
-        output_df["full_text"] = output_df["text"] + sep + output_df["prompt_question"] + sep + output_df["prompt_text"]
+    # すべてのテキスト情報
+    elif cfg.use_text == "full_text":
+        output_df["full_text"] = (
+            output_df["text_len_type"]
+            + " "
+            + sep
+            + " "
+            + output_df["text"]
+            + " "
+            + sep
+            + " "
+            + output_df["prompt_question"]
+            + " "
+            + sep
+            + " "
+            + output_df["prompt_title"]
+            + " "
+            + sep
+            + " "
+            + output_df["prompt_text"]
+        )
         # 改行文は文章の区切りのように使用している可能性があるので、別文字で置換する（本来は別トークンを用意するべき）
-        output_df["full_text"] = output_df["full_text"].str.replace("\n\n", "|")
-        output_df["full_text"] = output_df["full_text"].str.replace("\r\n", "|")
+        output_df["full_text"] = output_df["full_text"].str.replace("\n\n", "| ")
+        output_df["full_text"] = output_df["full_text"].str.replace("\r\n", "| ")
 
         # 一部の改行\nは削除するようにする
         output_df["full_text"] = output_df["full_text"].str.replace("\n", "")
 
+    elif cfg.use_text == "full_text2":
+        output_df["full_text"] = (
+            output_df["text"]
+            + " "
+            + sep
+            + " "
+            + output_df["prompt_question"]
+            + " "
+            + sep
+            + " "
+            + output_df["prompt_title"]
+            + " "
+            + sep
+            + " "
+            + output_df["summarized_prompt_text"]
+        )
+
+    # テキストと質問（順番入れ替え）
     elif cfg.use_text == "text_question":
         # テキストを先頭にしてみる
         output_df["full_text"] = output_df["text"] + sep + output_df["prompt_question"]
@@ -159,6 +483,21 @@ def create_text(input_df, tokenizer, cfg):
         )
     else:
         output_df["full_text"] = output_df["text"]
+
+    print("prepare input. sample text:\n")
+    print(f"{output_df['full_text'][0]}")
+    print("")
+    print(f"{output_df[output_df['student_id']=='1853d9257219']['full_text'].values[0]}")
+    print("")
+    print(f"{output_df[output_df['student_id'] == '81b4b359e045']['full_text'].values[0]}")
+    print("")
+    print(f"{output_df[output_df['student_id'] == '2c868d9bd1e7']['full_text'].values[0]}")
+    print("")
+    print(f"{output_df[output_df['student_id'] == '574369ff8f20']['full_text'].values[0]}")
+    print("")
+    print(f"{output_df[output_df['student_id'] == '33951bf37912']['full_text'].values[0]}")
+    print("")
+    print(f"{output_df[output_df['student_id'] == 'bce3dd3877d2']['full_text'].values[0]}")
 
     return output_df
 
@@ -572,8 +911,26 @@ def main(cfg: DictConfig) -> None:
         print(train_df.shape)
 
         # load_tokenizer
-        tokenizer = AutoTokenizer.from_pretrained(cfg.model_name)
+        # 追加トークンを入れる
+        special_tokens_replacement = get_additional_special_tokens()
+        all_special_tokens = list(special_tokens_replacement.values())
+
+        tokenizer = AutoTokenizer.from_pretrained(
+            cfg.model_name, use_fast=True, additional_special_tokens=all_special_tokens
+        )
         tokenizer.save_pretrained(os.path.join(cfg.output_dir, "tokenizer"))
+        # 追加したトークンが入っているか確認
+        print(tokenizer.additional_special_tokens)
+        # 特殊トークンでテキストが変換されているか確認
+        sample_text = "Finally, they reused old hog skins that [SEP] people would not eat until they chopped it up and false advertised it by relabeling it as head cheese [PARAGRAPH]."
+        sample_input_ids = tokenizer.encode(sample_text)
+        # Print the IDs
+        print("Token IDs:", sample_input_ids)
+        # Decode the IDs back to text
+        decoded_text = tokenizer.decode(sample_input_ids)
+
+        # Print the decoded text
+        print("\nDecoded Text:", decoded_text)
 
         # create_text
         train_df = create_text(train_df, tokenizer, cfg)
