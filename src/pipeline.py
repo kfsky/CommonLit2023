@@ -15,6 +15,7 @@ import tokenizers
 import torch
 import torch.nn as nn
 import transformers
+from bs4 import BeautifulSoup
 from iterstrat.ml_stratifiers import MultilabelStratifiedKFold
 from sklearn.model_selection import GroupKFold, StratifiedKFold
 from torch.optim import AdamW
@@ -173,6 +174,8 @@ def get_additional_special_tokens():
     special_tokens_replacement = {
         "\n": "[BR]",
         "Paragraph": "[PARAGRAPH]",
+        "Author": "[AUTHOR]",
+        "misspell": "[MISSPELL]",
     }
     return special_tokens_replacement
 
@@ -260,6 +263,36 @@ def len2text(text: str):
         return "Long"
 
 
+def text_cleaning(text):
+    template = re.compile(r"https?://\S+|www\.\S+")  # Removes website links
+    text = template.sub(r"", text)
+
+    soup = BeautifulSoup(text, "lxml")  # Removes HTML tags
+    only_text = soup.get_text()
+    text = only_text
+
+    emoji_pattern = re.compile(
+        "["
+        "\U0001F600-\U0001F64F"  # emoticons
+        "\U0001F300-\U0001F5FF"  # symbols & pictographs
+        "\U0001F680-\U0001F6FF"  # transport & map symbols
+        "\U0001F1E0-\U0001F1FF"  # flags (iOS)
+        "\U00002702-\U000027B0"
+        "\U000024C2-\U0001F251"
+        "]+",
+        flags=re.UNICODE,
+    )
+    text = emoji_pattern.sub(r"", text)
+
+    text = re.sub(r"[^a-zA-Z\d]", " ", text)  # Remove special Charecters
+    text = re.sub("\n+", "\n", text)
+    text = re.sub("\.+", ".", text)
+    text = re.sub(" +", " ", text)  # Remove Extra Spaces
+    text = re.sub(r"\d+", "", text)  # Remove numbers
+
+    return text
+
+
 def create_text(input_df, tokenizer, cfg):
     output_df = input_df.copy()
     sep = tokenizer.sep_token
@@ -272,6 +305,7 @@ def create_text(input_df, tokenizer, cfg):
     output_df["text"] = output_df["text"].apply(lambda x: x.replace("     ", ""))
     output_df["text"] = output_df["text"].apply(lambda x: x.replace("  ", " "))
     output_df["text"] = output_df["text"].apply(lambda x: x.replace("&", "and"))
+    output_df["text"] = output_df["text"].apply(lambda x: x.replace('"(', '" ('))
     output_df["text"] = output_df["text"].apply(lambda x: x.replace("...", " "))
     output_df["text"] = output_df["text"].apply(lambda x: x.replace(".....", " "))
     output_df["text"] = output_df["text"].apply(lambda x: x.replace(" ,", ","))
@@ -281,17 +315,24 @@ def create_text(input_df, tokenizer, cfg):
     output_df["text"] = output_df["text"].apply(lambda x: x.replace("[t]", "t"))
     output_df["text"] = output_df["text"].apply(lambda x: x.replace("[A]", "A"))
     output_df["text"] = output_df["text"].apply(lambda x: x.replace("[...]", ""))
+    output_df["text"] = output_df["text"].apply(lambda x: x.replace("[. . .]", ""))
     # output_df["text"] = output_df["text"].apply(lambda x: x.replace("(CommonLit Staff)", ""))
     # output_df["text"] = output_df["text"].apply(lambda x: x.replace("(CommonLit)", ""))
     # output_df["text"] = output_df["text"].apply(lambda x: x.replace("(commonlit.org)", ""))
-    output_df["text"] = output_df["text"].str.replace(r"\(\d+\)", "", regex=True).str.strip()
-    output_df["text"] = output_df["text"].str.replace(r"\(\d+(-\d+)?\)", "", regex=True).str.strip()
-    output_df["text"] = output_df["text"].str.replace(r"\[\d+\]", "", regex=True).str.strip()
+    # output_df["text"] = output_df["text"].str.replace(r"\(\d+\)", "", regex=True).str.strip()
+    # output_df["text"] = output_df["text"].str.replace(r"\(\d+(-\d+)?\)", "", regex=True).str.strip()
+    # output_df["text"] = output_df["text"].str.replace(r"\[\d+\]", "", regex=True).str.strip()
     output_df["text"] = output_df["text"].str.replace(r"\[([^\]]+)\]", r"\1", regex=True)
     # output_df["text"] = output_df["text"].str.replace(r"\(Commonlit \d+\)", "", regex=True)
     # output_df["text"] = output_df["text"].str.replace(r"\(Commonlit Staff \d+\)", "", regex=True)
 
+    output_df["text"] = output_df["text"].apply(lambda x: x.replace("[", ""))
+    output_df["text"] = output_df["text"].apply(lambda x: x.replace("]", ""))
+
     # パラグラフを参照している部分を特殊トークンに置換
+    output_df["text"] = output_df["text"].str.replace(r"\(\d+\)", "[PARAGRAPH]", regex=True)
+    output_df["text"] = output_df["text"].str.replace(r"\(\d+(-\d+)?\)", "[PARAGRAPH]", regex=True)
+    output_df["text"] = output_df["text"].str.replace(r"\[\d+\]", "[PARAGRAPH]", regex=True)
     output_df["text"] = output_df["text"].str.replace(r"\(paragraph \d+\)", "[PARAGRAPH]", regex=True)
     output_df["text"] = output_df["text"].str.replace(r"\(Paragraph \d+\)", "[PARAGRAPH]", regex=True)
     output_df["text"] = output_df["text"].str.replace(r"\(Paragraph \d+ and \d+\)", "[PARAGRAPH]", regex=True)
@@ -317,25 +358,36 @@ def create_text(input_df, tokenizer, cfg):
 
     # 著者情報を特殊トークンにする
     output_df["text"] = output_df["text"].apply(lambda x: x.replace("(CommonLit Staff)", "[AUTHOR]"))
+    output_df["text"] = output_df["text"].apply(lambda x: x.replace("CommonLit Staff", "[AUTHOR]"))
     output_df["text"] = output_df["text"].apply(lambda x: x.replace("(CommonLit)", "[AUTHOR]"))
     output_df["text"] = output_df["text"].apply(lambda x: x.replace("(commonlit.org)", "[AUTHOR]"))
     output_df["text"] = output_df["text"].str.replace(r"\(Commonlit \d+\)", "[AUTHOR]", regex=True)
     output_df["text"] = output_df["text"].str.replace(r"\(Commonlit Staff \d+\)", "[AUTHOR]", regex=True)
-    output_df["text"] = output_df["text"].apply(lambda x: x.replace("(commonlit.org)", ""))
+    output_df["text"] = output_df["text"].apply(lambda x: x.replace("(commonlit.org)", "[AUTHOR]"))
 
     output_df["text"] = output_df["text"].str.replace(r"\(The Third Wave \d+\)", "[AUTHOR]", regex=True)
     output_df["text"] = output_df["text"].str.replace(r"\(The Third Wave \d+\)", "[AUTHOR]", regex=True)
 
     output_df["text"] = output_df["text"].apply(lambda x: x.replace("(UShistory.org)", "[AUTHOR]"))
+    output_df["text"] = output_df["text"].apply(lambda x: x.replace("( UShistory.org)", "[AUTHOR]"))
+
     output_df["text"] = output_df["text"].str.replace(r"\(UShistory.org \d+\)", "[AUTHOR]", regex=True)
     output_df["text"] = output_df["text"].str.replace(r"\(USHistory.org paragraph \d+\)", "[AUTHOR]", regex=True)
+    output_df["text"] = output_df["text"].apply(lambda x: x.replace("UShistory.org", "[AUTHOR]"))
 
     output_df["text"] = output_df["text"].apply(lambda x: x.replace("(Aristotle)", "[AUTHOR]"))
     output_df["text"] = output_df["text"].str.replace(r"\(Aristotle \d+\)", "[AUTHOR]", regex=True)
     output_df["text"] = output_df["text"].str.replace(r"\(Aristotle, \d+\)", "[AUTHOR]", regex=True)
     output_df["text"] = output_df["text"].str.replace(r"\(Aristotle \d+-\d+\)", "[AUTHOR]", regex=True)
+    output_df["text"] = output_df["text"].apply(lambda x: x.replace("Aristotle", "[AUTHOR]"))
 
     output_df["text"] = output_df["text"].apply(lambda x: x.replace("(Upton Sinclair)", "[AUTHOR]"))
+
+    output_df["text"] = output_df["text"].apply(lambda x: x.replace("(Sinclair)", "[AUTHOR]"))
+    output_df["text"] = output_df["text"].str.replace(r"\(Sinclair \d+\)", "[AUTHOR]", regex=True)
+    output_df["text"] = output_df["text"].str.replace(r"\(Sinclair, para. \d+\)", "[AUTHOR]", regex=True)
+    output_df["text"] = output_df["text"].apply(lambda x: x.replace("Upton Sinclair", "[AUTHOR]"))
+    output_df["text"] = output_df["text"].apply(lambda x: x.replace("Sinclair", "[AUTHOR]"))
 
     # カンマのあとにスペース
     output_df["text"] = output_df["text"].str.replace(r"(?<=[.,])(?=[^\s])", " ", regex=True)
@@ -357,6 +409,17 @@ def create_text(input_df, tokenizer, cfg):
     output_df["prompt_text"] = output_df["prompt_text"].apply(lambda x: x.replace("— ", ""))
     output_df["prompt_text"] = output_df["prompt_text"].apply(lambda x: x.replace("; ", ","))
     output_df["prompt_text"] = output_df["prompt_text"].apply(lambda x: x.replace(": ", ","))
+
+    # テキストクリーニング
+    output_df["prompt_text"] = output_df["prompt_text"].apply(text_cleaning)
+
+    # スペルミスの単語をここで特殊トークンとして認識させることでwordingの予測精度を向上できないか？
+    with open("conf/typo.json", "r") as f:
+        typo_dict = json.load(f)
+
+    # dictのキーのみに対してループ
+    # for k in typo_dict.keys():
+    #     output_df["text"] = output_df["text"].apply(lambda x: x.replace(k + " ", "[MISSPELL] "))
 
     output_df["summarized_prompt_text"] = ""
 
@@ -419,12 +482,18 @@ def create_text(input_df, tokenizer, cfg):
     # 目的変数を先頭に追加
     elif cfg.use_text == "target_prompt_question_title_text":
         output_df["full_text"] = (
-            "content wording "
+            "content wording"
+            + " "
             + sep
+            + " "
             + output_df["prompt_question"]
+            + " "
             + sep
+            + " "
             + output_df["prompt_title"]
+            + " "
             + sep
+            + " "
             + output_df["text"]
         )
     # すべてのテキスト情報
@@ -472,6 +541,26 @@ def create_text(input_df, tokenizer, cfg):
             + output_df["summarized_prompt_text"]
         )
 
+    # テキストとpromot
+    elif cfg.use_text == "text_prompt":
+        output_df["full_text"] = (
+            output_df["text_len_type"]
+            + " "
+            + sep
+            + " "
+            + output_df["text"]
+            + " "
+            + sep
+            + " "
+            + output_df["prompt_text"]
+        )
+        # 改行文は文章の区切りのように使用している可能性があるので、別文字で置換する（本来は別トークンを用意するべき）
+        output_df["full_text"] = output_df["full_text"].str.replace("\n\n", "| ")
+        output_df["full_text"] = output_df["full_text"].str.replace("\r\n", "| ")
+
+        # 一部の改行\nは削除するようにする
+        output_df["full_text"] = output_df["full_text"].str.replace("\n", "")
+
     # テキストと質問（順番入れ替え）
     elif cfg.use_text == "text_question":
         # テキストを先頭にしてみる
@@ -489,13 +578,13 @@ def create_text(input_df, tokenizer, cfg):
     print("")
     print(f"{output_df[output_df['student_id']=='1853d9257219']['full_text'].values[0]}")
     print("")
-    print(f"{output_df[output_df['student_id'] == '81b4b359e045']['full_text'].values[0]}")
+    print(f"{output_df[output_df['student_id'] == '9b8236dd1e52']['full_text'].values[0]}")
     print("")
     print(f"{output_df[output_df['student_id'] == '2c868d9bd1e7']['full_text'].values[0]}")
     print("")
     print(f"{output_df[output_df['student_id'] == '574369ff8f20']['full_text'].values[0]}")
     print("")
-    print(f"{output_df[output_df['student_id'] == '33951bf37912']['full_text'].values[0]}")
+    print(f"{output_df[output_df['student_id'] == '4f63273f4aa9']['full_text'].values[0]}")
     print("")
     print(f"{output_df[output_df['student_id'] == 'bce3dd3877d2']['full_text'].values[0]}")
 

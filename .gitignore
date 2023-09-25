@@ -153,6 +153,7 @@ dmypy.json
 cython_debug/
 
 src/outputs/*
+notebooks/*.csv
 inputs/*
 outputs/*
 conf/kaggle.json

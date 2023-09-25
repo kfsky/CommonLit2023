@@ -19,6 +19,9 @@ sentencepiece = "^0.1.99"
 protobuf = "3.19.4"
 iterative-stratification = "^0.1.7"
 xformers = "^0.0.21"
+accelerate = "^0.23.0"
+beautifulsoup4 = "^4.12.2"
+lxml = "^4.9.3"
 
 [tool.poetry.group.dev.dependencies]
 black = "^23.3.0"
