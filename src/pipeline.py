@@ -357,37 +357,37 @@ def create_text(input_df, tokenizer, cfg):
     output_df["text"] = output_df["text"].str.replace(r"\(PA \d+ L \d+\)", "[PARAGRAPH]", regex=True)
 
     # 著者情報を特殊トークンにする
-    output_df["text"] = output_df["text"].apply(lambda x: x.replace("(CommonLit Staff)", "[AUTHOR]"))
-    output_df["text"] = output_df["text"].apply(lambda x: x.replace("CommonLit Staff", "[AUTHOR]"))
-    output_df["text"] = output_df["text"].apply(lambda x: x.replace("(CommonLit)", "[AUTHOR]"))
-    output_df["text"] = output_df["text"].apply(lambda x: x.replace("(commonlit.org)", "[AUTHOR]"))
-    output_df["text"] = output_df["text"].str.replace(r"\(Commonlit \d+\)", "[AUTHOR]", regex=True)
-    output_df["text"] = output_df["text"].str.replace(r"\(Commonlit Staff \d+\)", "[AUTHOR]", regex=True)
-    output_df["text"] = output_df["text"].apply(lambda x: x.replace("(commonlit.org)", "[AUTHOR]"))
-
-    output_df["text"] = output_df["text"].str.replace(r"\(The Third Wave \d+\)", "[AUTHOR]", regex=True)
-    output_df["text"] = output_df["text"].str.replace(r"\(The Third Wave \d+\)", "[AUTHOR]", regex=True)
-
-    output_df["text"] = output_df["text"].apply(lambda x: x.replace("(UShistory.org)", "[AUTHOR]"))
-    output_df["text"] = output_df["text"].apply(lambda x: x.replace("( UShistory.org)", "[AUTHOR]"))
-
-    output_df["text"] = output_df["text"].str.replace(r"\(UShistory.org \d+\)", "[AUTHOR]", regex=True)
-    output_df["text"] = output_df["text"].str.replace(r"\(USHistory.org paragraph \d+\)", "[AUTHOR]", regex=True)
-    output_df["text"] = output_df["text"].apply(lambda x: x.replace("UShistory.org", "[AUTHOR]"))
-
-    output_df["text"] = output_df["text"].apply(lambda x: x.replace("(Aristotle)", "[AUTHOR]"))
-    output_df["text"] = output_df["text"].str.replace(r"\(Aristotle \d+\)", "[AUTHOR]", regex=True)
-    output_df["text"] = output_df["text"].str.replace(r"\(Aristotle, \d+\)", "[AUTHOR]", regex=True)
-    output_df["text"] = output_df["text"].str.replace(r"\(Aristotle \d+-\d+\)", "[AUTHOR]", regex=True)
-    output_df["text"] = output_df["text"].apply(lambda x: x.replace("Aristotle", "[AUTHOR]"))
-
-    output_df["text"] = output_df["text"].apply(lambda x: x.replace("(Upton Sinclair)", "[AUTHOR]"))
-
-    output_df["text"] = output_df["text"].apply(lambda x: x.replace("(Sinclair)", "[AUTHOR]"))
-    output_df["text"] = output_df["text"].str.replace(r"\(Sinclair \d+\)", "[AUTHOR]", regex=True)
-    output_df["text"] = output_df["text"].str.replace(r"\(Sinclair, para. \d+\)", "[AUTHOR]", regex=True)
-    output_df["text"] = output_df["text"].apply(lambda x: x.replace("Upton Sinclair", "[AUTHOR]"))
-    output_df["text"] = output_df["text"].apply(lambda x: x.replace("Sinclair", "[AUTHOR]"))
+    # output_df["text"] = output_df["text"].apply(lambda x: x.replace("(CommonLit Staff)", "[AUTHOR]"))
+    # output_df["text"] = output_df["text"].apply(lambda x: x.replace("CommonLit Staff", "[AUTHOR]"))
+    # output_df["text"] = output_df["text"].apply(lambda x: x.replace("(CommonLit)", "[AUTHOR]"))
+    # output_df["text"] = output_df["text"].apply(lambda x: x.replace("(commonlit.org)", "[AUTHOR]"))
+    # output_df["text"] = output_df["text"].str.replace(r"\(Commonlit \d+\)", "[AUTHOR]", regex=True)
+    # output_df["text"] = output_df["text"].str.replace(r"\(Commonlit Staff \d+\)", "[AUTHOR]", regex=True)
+    # output_df["text"] = output_df["text"].apply(lambda x: x.replace("(commonlit.org)", "[AUTHOR]"))
+    #
+    # output_df["text"] = output_df["text"].str.replace(r"\(The Third Wave \d+\)", "[AUTHOR]", regex=True)
+    # output_df["text"] = output_df["text"].str.replace(r"\(The Third Wave \d+\)", "[AUTHOR]", regex=True)
+    #
+    # output_df["text"] = output_df["text"].apply(lambda x: x.replace("(UShistory.org)", "[AUTHOR]"))
+    # output_df["text"] = output_df["text"].apply(lambda x: x.replace("( UShistory.org)", "[AUTHOR]"))
+    #
+    # output_df["text"] = output_df["text"].str.replace(r"\(UShistory.org \d+\)", "[AUTHOR]", regex=True)
+    # output_df["text"] = output_df["text"].str.replace(r"\(USHistory.org paragraph \d+\)", "[AUTHOR]", regex=True)
+    # output_df["text"] = output_df["text"].apply(lambda x: x.replace("UShistory.org", "[AUTHOR]"))
+    #
+    # output_df["text"] = output_df["text"].apply(lambda x: x.replace("(Aristotle)", "[AUTHOR]"))
+    # output_df["text"] = output_df["text"].str.replace(r"\(Aristotle \d+\)", "[AUTHOR]", regex=True)
+    # output_df["text"] = output_df["text"].str.replace(r"\(Aristotle, \d+\)", "[AUTHOR]", regex=True)
+    # output_df["text"] = output_df["text"].str.replace(r"\(Aristotle \d+-\d+\)", "[AUTHOR]", regex=True)
+    # output_df["text"] = output_df["text"].apply(lambda x: x.replace("Aristotle", "[AUTHOR]"))
+    #
+    # output_df["text"] = output_df["text"].apply(lambda x: x.replace("(Upton Sinclair)", "[AUTHOR]"))
+    #
+    # output_df["text"] = output_df["text"].apply(lambda x: x.replace("(Sinclair)", "[AUTHOR]"))
+    # output_df["text"] = output_df["text"].str.replace(r"\(Sinclair \d+\)", "[AUTHOR]", regex=True)
+    # output_df["text"] = output_df["text"].str.replace(r"\(Sinclair, para. \d+\)", "[AUTHOR]", regex=True)
+    # output_df["text"] = output_df["text"].apply(lambda x: x.replace("Upton Sinclair", "[AUTHOR]"))
+    # output_df["text"] = output_df["text"].apply(lambda x: x.replace("Sinclair", "[AUTHOR]"))
 
     # カンマのあとにスペース
     output_df["text"] = output_df["text"].str.replace(r"(?<=[.,])(?=[^\s])", " ", regex=True)
